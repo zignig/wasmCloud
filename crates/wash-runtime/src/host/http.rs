@@ -460,6 +460,16 @@ pub trait Router: Send + Sync + 'static {
         allowed_hosts: &[AllowedHost],
     ) -> anyhow::Result<()>;
 
+    /// Take the request and rewrite it , override to make usefull
+    fn rewrite_incoming_request(
+        &self,
+        req: hyper::Request<hyper::body::Incoming>,
+    ) -> Result<hyper::Request<hyper::body::Incoming>, RouteError> {
+        // Change path and headers
+        // Do stuff , with only local knowledge
+        Ok(req)
+    }
+
     /// Pick a workload ID based on the incoming request.
     ///
     /// On failure, the returned [`RouteError`] determines the HTTP status
@@ -3409,6 +3419,16 @@ async fn handle_http_request<T: Router>(
             let resp = error_response(e.status());
             record_response_status(&resp);
             return Ok(resp);
+        }
+    };
+
+    // Send the incoming request for rewriting by the http handler
+    // does nothing by default unless overridden in the Router impl
+    let req = match handler.rewrite_incoming_request(req) {
+        Ok(req) => req,
+        Err(e) => {
+            error!(err = ?e, "service HTTP rewrite failed");
+            return Ok(error_response(500));
         }
     };
 
